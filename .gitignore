@@ -1,0 +1,33 @@
+# Node / backend
+node_modules/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
+out/
+coverage/
+
+# Logs
+logs/
+*.log
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Database / cache / runtime files
+*.sqlite
+*.sqlite3
+*.local
+
+# Optional: keep generated files out of Git
+*.tmp
+*.temp
