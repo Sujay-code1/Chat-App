@@ -1,7 +1,8 @@
 import express from 'express';
-import { redisClient } from '../index.js';
+import { loginUser } from '../controllers/user.js';
 
 const router = express.Router();
 
+router.post("/login", loginUser)
 
 export default router;
