@@ -38,8 +38,28 @@ export async function get(key: string): Promise<string | null> {
   }
 }
 
+export async function del(key: string): Promise<number | null> {
+  try {
+    if (fallback) {
+      const existed = memory.has(key)
+      memory.delete(key)
+      return existed ? 1 : 0
+    }
+    const v = await redisClient.del(key)
+    return v
+  } catch (err: any) {
+    if (err?.message && /NOPERM|no permissions|readonly/i.test(err.message)) {
+      fallback = true
+      const existed = memory.has(key)
+      memory.delete(key)
+      return existed ? 1 : 0
+    }
+    throw err
+  }
+}
+
 export function clearMemory() {
   memory.clear()
 }
 
-export default { get, set, clearMemory }
+export default { get, set, del, clearMemory }

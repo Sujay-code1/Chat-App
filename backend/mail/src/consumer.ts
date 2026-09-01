@@ -38,28 +38,37 @@ export const startSendOtpConsumer = async()=>{
                 const smtpPass = process.env.SMTP_PASS ?? process.env.PASSWORD
 
                 if (!smtpUser || !smtpPass) {
-                  throw new Error('Missing SMTP credentials. Set SMTP_USER and SMTP_PASS (or USER and PASSWORD) in your environment.')
+                  console.error('Missing SMTP credentials. Set SMTP_USER and SMTP_PASS (or USER and PASSWORD) in your environment.')
+                  // Reject the message so it can be retried or routed to a dead-letter queue
+                  // Do not ack to allow visibility in the queue
+                  channel.nack(msg, false, false)
+                  return
                 }
 
                 const transporter = nodemailer.createTransport({
-                  host: "smtp.gmail.com",
-                  port: 465,
-                  secure: true,
+                  host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+                  port: Number(process.env.SMTP_PORT ?? 465),
+                  secure: (process.env.SMTP_SECURE ?? 'true') === 'true',
                   auth: {
                     user: smtpUser,
                     pass: smtpPass
                   }
                 })
 
-                await transporter.sendMail({
-                  from: "Chat App <" + smtpUser + ">",
-                  to,
-                  subject,
-                  text: body
-                })
-               
+                try {
+                  await transporter.sendMail({
+                    from: `${process.env.SMTP_FROM ?? 'Chat App <' + smtpUser + '>'}`,
+                    to,
+                    subject,
+                    text: body
+                  })
                   console.log(`OTP mail sent to ${to}`)
                   channel.ack(msg)
+                } catch (sendError) {
+                  console.error('Failed to send OTP email:', sendError)
+                  // Nack without requeue to avoid infinite retry loops; adjust as needed
+                  channel.nack(msg, false, false)
+                }
               } catch (error) {
                 console.log("Failed to send OTP",error)
             }

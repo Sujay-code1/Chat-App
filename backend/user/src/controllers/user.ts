@@ -1,14 +1,16 @@
 import TryCatch from '../config/TryCatch.js'
-import * as cache from '../config/cache.js'
+import { get, set, del } from '../config/cache.js'
 import { publishToQueue } from '../config/rabbitmq.js'
 import {User} from "../model/User.js"
+import { generateToken } from '../config/generateToken.js'
+import type { AuthenticatedRequest } from '../middleware/isAuth.js'
 
 
 export const loginUser = TryCatch(async(req, res) => {
     const { email } = req.body
 
     const rateLimitKey = `otp:ratelimit:${email}`
-    const rateLimit = await cache.get(rateLimitKey)
+    const rateLimit = await get(rateLimitKey)
     if (rateLimit) {
         res.status(429).json({
             message: "Too many request. please wait before requesting new otp"
@@ -17,8 +19,8 @@ export const loginUser = TryCatch(async(req, res) => {
     }
     const otp = Math.floor(100000 + Math.random() * 900000).toString()
     const otpKey = `otp:${email}`
-    await cache.set(otpKey, otp, { EX: 300 })
-    await cache.set(rateLimitKey, 'true', { EX: 60 })
+    await set(otpKey, otp, { EX: 300 })
+    await set(rateLimitKey, 'true', { EX: 60 })
 
     const message = {
         to: email,
@@ -43,20 +45,36 @@ export const verifyUser = TryCatch(async(req, res)=>{
         return
     }
     const otpKey = `otp:${email}`
-    const storedOtp = await cache.get(otpKey)
+    const storedOtp = await get(otpKey)
     if(!storedOtp || enteredOtp !== storedOtp){
         return res.status(400).json({
-            message:"Invalid OTP"
+            message: "Invalid OTP"
         })
-        return;
     }
-   await redisClient.del(otpKey)
-   let user = await User.findOne({email})
 
-   if(!user){
-    const name = email.slice(0, 8);
-    user = await User.create({name, email})
-   }
+    await del(otpKey)
 
-   
-});
+    let user = await User.findOne({ email })
+
+    if(!user){
+        const name = email.slice(0, 8)
+        user = await User.create({ name, email })
+    }
+
+    // generateToken should be defined/imported elsewhere in the project
+    // if it's missing, this will throw; ensure generateToken is available
+    const token = generateToken(user)
+
+    return res.status(200).json({
+        message: "User verified",
+        token,
+        user
+    }) 
+
+})
+
+export const myProfile = TryCatch(async(req: AuthenticatedRequest, res)=>{
+   const user = req.user
+
+   res.json(user); 
+})
