@@ -1,5 +1,18 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file
+  "files": [
+    "src/index.ts",
+    "src/config/cache.ts",
+    "src/config/db.ts",
+    "src/config/generateToken.ts",
+    "src/config/rabbitmq.ts",
+    "src/config/redisClient.ts",
+    "src/config/TryCatch.ts",
+    "src/controllers/user.ts",
+    "src/middleware/isAuth.ts",
+    "src/model/User.ts",
+    "src/routes/user.ts"
+  ],
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",

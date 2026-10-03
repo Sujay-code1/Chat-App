@@ -1,5 +1,18 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file
+  "files": [
+    "src/index.ts",
+    "src/config/cloudinary.ts",
+    "src/config/db.ts",
+    "src/config/TryCatch.ts",
+    "src/controllers/chat.ts",
+    "src/middleware/isAuth.ts",
+    "src/middleware/multer.ts",
+    "src/models/chat.ts",
+    "src/models/messages.ts",
+    "src/routes/chat.ts",
+    "src/types/multer-storage-cloudinary.d.ts"
+  ],
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",

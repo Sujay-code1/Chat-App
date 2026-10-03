@@ -102,3 +102,71 @@ Notes:
 
 ---
 Generated: architecture summary for current backend implementation.
+
+## Endpoint checks
+
+Use these quick checks to verify each HTTP endpoint is reachable and behaving as expected. Replace `localhost:5000` with the service host/port from your environment if different.
+
+- Health / basic reachability
+
+  - Intent: confirm the HTTP server is running and accepts requests.
+  - Command:
+
+  ```bash
+  curl -v http://localhost:5000/
+  ```
+
+  - Expected: a 200 or 404 from the server (server responds). If you get "Connection refused" or "Failed to connect", the service isn't running on that port.
+
+- POST /api/v1/login (request OTP)
+
+  - Intent: send an OTP to an email (creates OTP in Redis and publishes to RabbitMQ).
+  - Command:
+
+  ```bash
+  curl -v -X POST http://localhost:5000/api/v1/login \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com"}'
+  ```
+
+  - Expected: HTTP 200 with JSON body similar to `{ "message": "OTP sent to your mail" }`.
+  - If you see a network error: the server is not reachable (wrong port, service down, firewall). If you get a JSON error, read the `message` field.
+
+- POST /api/v1/verify (verify OTP)
+
+  - Intent: verify the OTP previously sent, create the user, and return a token.
+  - Command (replace `123456` with the real OTP):
+
+  ```bash
+  curl -v -X POST http://localhost:5000/api/v1/verify \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com","otp":"123456"}'
+  ```
+
+  - Expected: HTTP 200 with JSON body including `token` and `user` fields.
+
+- GET /api/v1/me (authenticated)
+
+  - Intent: validate that protected endpoints accept the JWT returned from `/verify`.
+  - Command:
+
+  ```bash
+  curl -v http://localhost:5000/api/v1/me -H "Authorization: Bearer <TOKEN>"
+  ```
+
+  - Expected: HTTP 200 with the current user's JSON profile. If you receive 401/403, check the `Authorization` header formatting and `JWT_SECRET`.
+
+- CORS & Browser checks
+
+  - Intent: ensure frontend running on a different port can call backend.
+  - Debugging steps:
+    - From browser DevTools, check the Network tab for the request and CORS preflight (OPTIONS) failures.
+    - In the backend, `app.use(cors())` allows all origins in this codebase; if you have a stricter policy, add the frontend origin.
+
+- Common failure modes
+
+  - "Network Error" (Axios): backend not running or wrong port/host.
+  - 429 from `/login`: rate-limit key present in Redis (wait 60s or clear key for testing).
+  - 400 from `/verify`: OTP missing or wrong — ensure correct OTP is used.
+
+If you want, I can add a small `health` endpoint and example Postman collection to automate these checks.

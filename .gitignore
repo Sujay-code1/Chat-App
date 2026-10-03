@@ -31,3 +31,7 @@ Thumbs.db
 # Optional: keep generated files out of Git
 *.tmp
 *.temp
+
+# Ignore architecture documentation
+ARCHITECTURE.md
+backend/ARCHITECTURE.md

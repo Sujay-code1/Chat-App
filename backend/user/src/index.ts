@@ -9,8 +9,6 @@ import cors from "cors";
 
 
 dotenv.config();
-connectDb();
-connectRabbitMq();
 
 
 // Redis client is initialized by `src/config/redisClient.ts` (imported above)
@@ -25,8 +23,23 @@ app.use(cors());
 
 app.use("/api/v1", userRoutes);
 
-const PORT = Number(process.env.PORT) || 8000;
+// Basic health endpoint for readiness checks
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), timestamp: Date.now() });
+});
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const PORT = Number(process.env.PORT) || 5000;
+
+async function startServer() {
+  await connectDb();
+  await connectRabbitMq();
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+startServer().catch((error: unknown) => {
+  console.error("Failed to start user service:", error);
+  process.exit(1);
 });

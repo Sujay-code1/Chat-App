@@ -33,6 +33,12 @@ export const publishToQueue = async(queueName: string, message:any) =>{
     console.log("Rabbitmq channel is not initialized")
     return;
   }
+
+  console.log(`Publishing message to RabbitMQ queue: ${queueName}`)
+  console.log("Queue payload:", JSON.stringify(message))
+
   await channel.assertQueue(queueName, {durable: true});
-  channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)), {persistent: true});
-}
+  const sent = channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)), {persistent: true});
+
+  console.log(`Send result for queue ${queueName}: ${sent}`)
+} 

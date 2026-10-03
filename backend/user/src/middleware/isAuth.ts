@@ -33,7 +33,7 @@ export const isAuth = async (req: AuthenticatedRequest, res: Response, next: Nex
           return;
       }
 
-    const decodedValue = (jwt as any).verify(token, secret) as JwtPayload;
+    const decodedValue = (jwt as any).verify(token, secret) as JwtPayload & { user?: IUser };
 
        if(!decodedValue || !decodedValue.user){
              res.status(401).json({ message: 'Invalid token' });

@@ -6,11 +6,15 @@ dotenv.config();
 
 const app = express()
 
-startSendOtpConsumer()
-
 const port = process.env.PORT || 8000;
 
-app.listen(port, () => {
-    console.log(`Mail service is running on port ${port}`)
-})
-
+startSendOtpConsumer()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`Mail service is running on port ${port}`)
+    })
+  })
+  .catch((error: unknown) => {
+    console.error("Failed to start mail service:", error)
+    process.exit(1)
+  })

@@ -1,5 +1,9 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file
+  "files": [
+    "src/index.ts",
+    "src/consumer.ts"
+  ],
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",
@@ -9,7 +13,7 @@
     // See also https://aka.ms/tsconfig/module
     "module": "nodenext",
     "target": "es2020",
-    "types": [],
+    "types": ["node"],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
