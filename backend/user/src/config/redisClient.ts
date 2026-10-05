@@ -14,11 +14,24 @@ if (/(_ro|default_ro|:ro)/i.test(redisUrl)) {
 
 export const redisClient = createClient({ url: redisUrl })
 
-redisClient.connect()
-.then(() => console.log('Redis client connected'))
-.catch((err) => {
-  console.error('Redis connection failed:')
-  console.error(err)
+redisClient.on('error', (error) => {
+  console.error('Redis client error:', error instanceof Error ? error.message : error)
 })
+
+export async function connectRedis() {
+  if (redisClient.isOpen) return
+
+  try {
+    await redisClient.connect()
+    await redisClient.ping()
+    console.log('Redis client connected and ready')
+  } catch (error) {
+    console.error(
+      'Redis connection failed:',
+      error instanceof Error ? error.message : error,
+    )
+    throw error
+  }
+}
 
 export default redisClient

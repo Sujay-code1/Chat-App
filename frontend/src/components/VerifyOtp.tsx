@@ -173,8 +173,8 @@ export default function VerifyOtp() {
 
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0a0d1a] text-white">
-      <div className="w-full max-w-md p-6 bg-[#0a0d2a] rounded-xl">
+    <main className="auth-shell flex min-h-screen items-center justify-center text-white">
+      <div className="w-full max-w-md p-6 bg-[#111916] rounded-xl">
         <div className="mb-6 flex items-center justify-between">
           <button
             type="button"
@@ -188,7 +188,7 @@ export default function VerifyOtp() {
         </div>
 
         <div className="mb-4 text-center">
-          <h1 className="text-3xl font-semibold text-[#1b62ff]">Verify your account</h1>
+          <h1 className="text-3xl font-semibold text-[#94e2b5]">Verify your account</h1>
         </div>
 
         <p className="text-sm text-slate-400 mb-4">
@@ -210,7 +210,7 @@ export default function VerifyOtp() {
                 type="text"
                 inputMode="numeric"
                 maxLength={1}
-                className="w-10 h-10 text-center rounded bg-[#111628] border border-slate-800 text-white"
+                className="w-10 h-10 text-center rounded bg-[#18211d] border border-slate-700/60 text-white"
               />
             ))}
           </div>
@@ -218,7 +218,7 @@ export default function VerifyOtp() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded bg-[#1b62ff] py-2"
+            className="w-full rounded bg-[#94e2b5] py-2 font-semibold text-[#183023]"
           >
             {loading ? "Verifying..." : "Verify"}
           </button>

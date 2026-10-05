@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-let channel: amqp.Channel | null = null;
+let channel: amqp.ConfirmChannel | null = null;
 export const connectRabbitMq = async () => {
   try {
     const host = process.env.RABBITMQ_HOST ?? "localhost";
@@ -19,7 +19,16 @@ export const connectRabbitMq = async () => {
       password,
     });
 
-    channel = await connection.createChannel();
+    const confirmChannel = await connection.createConfirmChannel();
+    channel = confirmChannel;
+
+    connection.on("close", () => {
+      channel = null;
+      console.error("RabbitMQ connection closed");
+    });
+    connection.on("error", (error) => {
+      console.error("RabbitMQ connection error:", error.message);
+    });
 
     console.log("Connected to RabbitMQ");
   } catch (error) {
@@ -29,16 +38,21 @@ export const connectRabbitMq = async () => {
 };
 
 export const publishToQueue = async(queueName: string, message:any) =>{
-  if(!channel){
-    console.log("Rabbitmq channel is not initialized")
-    return;
+  const activeChannel = channel;
+  if(!activeChannel){
+    throw new Error("RabbitMQ is not connected; OTP message was not queued");
   }
 
-  console.log(`Publishing message to RabbitMQ queue: ${queueName}`)
-  console.log("Queue payload:", JSON.stringify(message))
-
-  await channel.assertQueue(queueName, {durable: true});
-  const sent = channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)), {persistent: true});
-
-  console.log(`Send result for queue ${queueName}: ${sent}`)
-} 
+  await activeChannel.assertQueue(queueName, {durable: true});
+  await new Promise<void>((resolve, reject) => {
+    activeChannel.sendToQueue(
+      queueName,
+      Buffer.from(JSON.stringify(message)),
+      { persistent: true },
+      (error) => {
+        if (error) reject(error);
+        else resolve();
+      },
+    );
+  });
+}

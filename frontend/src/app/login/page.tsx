@@ -57,7 +57,7 @@ export default function LoginPage() {
  if (isAuth) return null;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#0a0d1a] px-4 text-white font-sans">
+    <main className="auth-shell flex min-h-screen flex-col items-center justify-center px-4 text-white font-sans">
       <div className="w-full max-w-100 text-center">
         
         {/* Title & Subtitle */}
@@ -82,7 +82,7 @@ export default function LoginPage() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg bg-[#111628] border border-slate-800/80 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all duration-200"
+              className="w-full rounded-lg bg-[#18211d] border border-slate-700/60 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-[#94e2b5] focus:ring-1 focus:ring-[#94e2b5] transition-all duration-200"
             />
           </div>
 
@@ -90,7 +90,7 @@ export default function LoginPage() {
             disabled={loading}
             aria-busy={loading}
             type="submit"
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#1b62ff] hover:bg-blue-600 active:scale-[0.99] py-3 px-4 text-sm font-semibold text-white transition-all duration-150 shadow-md shadow-blue-500/20"
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-[0.99] py-3 px-4 text-sm font-semibold text-white transition-all duration-150 shadow-md shadow-blue-900/30"
           >
             {loading ? (
               <>

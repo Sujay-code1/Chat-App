@@ -24,7 +24,9 @@
     "mongoose": "^9.9.4",
     "multer": "^2.3.0",
     "multer-storage-cloudinary": "^2.2.1",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "socket.io": "^4.8.1",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@types/axios": "^0.14.4",

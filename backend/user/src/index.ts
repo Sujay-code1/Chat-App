@@ -2,17 +2,13 @@ import express from "express";
 import dotenv from "dotenv";
 import connectDb from "./config/db.js";
 import userRoutes from './routes/user.js'
-import './config/redisClient.js'
+import { connectRedis } from './config/redisClient.js'
 import { connectRabbitMq } from "./config/rabbitmq.js";
 import cors from "cors";
 
 
 
 dotenv.config();
-
-
-// Redis client is initialized by `src/config/redisClient.ts` (imported above)
-
 
 
 const app = express();
@@ -32,6 +28,7 @@ const PORT = Number(process.env.PORT) || 5000;
 
 async function startServer() {
   await connectDb();
+  await connectRedis();
   await connectRabbitMq();
 
   app.listen(PORT, () => {

@@ -7,7 +7,7 @@ const storage: any = isCloudinaryConfigured
       cloudinary,
       params: {
         folder: "chat-images",
-        allowed_formats: ["jpg", "jpeg", "png", "gif"],
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
         transformation: [{ width: 500, height: 500, crop: "limit" }, { quality: "auto" }],
       },
     })
@@ -26,4 +26,3 @@ export const upload = multer({
     }
   },
 });
-
