@@ -1,7 +1,7 @@
 "use client";
 
 import { user_service, useAppData } from "@/src/context/AppContext";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -23,30 +23,36 @@ export default function LoginPage() {
    }
  }, [isAuth, userLoading, router]);
 
- const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) : Promise<void> => {
+ const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      toast.error("Enter your email address");
+      return;
+    }
     setLoading(true);
 
     try {
-      const { data } = await axios.post(`${user_service}/api/v1/login`, { email })
-
-     
-      console.log("login response:", data);
-      toast.success(data?.message || "Verification link sent. Please check your email.")
-      const target = `/verify?email=${encodeURIComponent(email)}`;
-     
-      console.log("navigating to:", target);
-      await router.push(target);
+      const { data } = await axios.post<{ message?: string }>(
+        `${user_service}/api/v1/login`,
+        { email: normalizedEmail },
+      );
+      toast.success(data.message || "OTP sent. Please check your email.");
+      const target = new URLSearchParams({ email: normalizedEmail });
+      const inviteToken = new URLSearchParams(window.location.search).get("invite");
+      if (inviteToken) target.set("invite", inviteToken);
+      await router.push(`/verify?${target.toString()}`);
 
     } catch (err: unknown) {
-      const message = axios.isAxiosError(err)
-        ? err.response?.data?.message || err.message
+      const message = axios.isAxiosError<{ message?: string }>(err)
+        ? err.response?.data?.message ??
+          (err.response
+            ? err.message
+            : "Unable to reach the login service. Check that the user backend is running and NEXT_PUBLIC_USER_SERVICE_URL is correct.")
         : err instanceof Error
           ? err.message
-          : String(err);
-     
+          : "Could not send a verification code";
       toast.error(message);
-      
       console.error("Login error:", err);
     } finally {
       setLoading(false);
@@ -65,7 +71,7 @@ export default function LoginPage() {
            Welcome back
         </h1>
         <p className="text-slate-400 text-sm font-normal mb-8">
-          Sign in to ChatApp to continue
+          Sign in to Mingle to continue
         </p>
 
         {/* Form */}
@@ -79,6 +85,7 @@ export default function LoginPage() {
             <input
               id="email"
               type="email"
+              required
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

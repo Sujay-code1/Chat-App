@@ -15,14 +15,17 @@ import axios from "axios";
 import { toast } from "react-hot-toast";
 
 export const user_service =
-  process.env.NEXT_PUBLIC_USER_SERVICE_URL ?? "http://localhost:5000";
+  process.env.NEXT_PUBLIC_USER_SERVICE_URL ??
+  (process.env.NODE_ENV === "production" ? "/user" : "http://localhost:5000");
 export const chat_service =
-  process.env.NEXT_PUBLIC_CHAT_SERVICE_URL ?? "http://localhost:5002";
+  process.env.NEXT_PUBLIC_CHAT_SERVICE_URL ??
+  (process.env.NODE_ENV === "production" ? "/chat" : "http://localhost:5002");
 
 export interface User {
   _id: string;
   name: string;
   email: string;
+  contactName?: string;
 }
 
 export interface Chat {

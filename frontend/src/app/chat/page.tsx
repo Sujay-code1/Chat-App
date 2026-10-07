@@ -9,14 +9,12 @@ import toast from "react-hot-toast";
 import Loading from "@/src/components/Loading";
 import ConversationSidebar from "@/src/components/chat/ConversationSidebar";
 import ConversationView from "@/src/components/chat/ConversationView";
-import NewChatDialog from "@/src/components/chat/NewChatDialog";
 import type { ChatMessage } from "@/src/components/chat/types";
 import {
   chat_service,
   user_service,
   useAppData,
   type Chats,
-  type User,
 } from "@/src/context/AppContext";
 
 export default function ChatApp() {
@@ -24,30 +22,48 @@ export default function ChatApp() {
   const { user, chats, loading, isAuth, fetchChats, logoutUser } = useAppData();
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [directory, setDirectory] = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [messagesChatId, setMessagesChatId] = useState<string | null>(null);
-  const [directoryLoaded, setDirectoryLoaded] = useState(false);
   const [sending, setSending] = useState(false);
-  const [showNewChat, setShowNewChat] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(() => new Set());
   const lastConnectionErrorRef = useRef<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeChatIdRef = useRef<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const selectedChatId = activeChatId ?? chats[0]?.chat._id ?? null;
+  const selectedChatId = activeChatId;
   const activeConversation = chats.find(({ chat }) => chat._id === selectedChatId) ?? null;
   const loadingMessages = Boolean(selectedChatId && messagesChatId !== selectedChatId);
-  const loadingDirectory = showNewChat && !directoryLoaded;
-
   useEffect(() => {
     if (!loading && !isAuth) router.replace("/login");
   }, [isAuth, loading, router]);
+
+  useEffect(() => {
+    if (!isAuth) return;
+    const inviterId = window.localStorage.getItem("pending-inviter-id");
+    const token = Cookies.get("token");
+    if (!inviterId || !token) return;
+
+    void axios
+      .post(
+        `${chat_service}/api/v1/chat/invited`,
+        { otherUserId: inviterId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      .then(async () => {
+        window.localStorage.removeItem("pending-inviter-id");
+        await fetchChats();
+      })
+      .catch((error: unknown) => {
+        console.error("Unable to retry adding inviter to the friend list", error);
+        toast.error("Could not add your inviter to the friend list yet. Please try again later.");
+      });
+  }, [fetchChats, isAuth]);
 
   useEffect(() => {
     activeChatIdRef.current = selectedChatId;
@@ -58,7 +74,10 @@ export default function ChatApp() {
     const token = Cookies.get("token");
     if (!token) return;
 
-    const socket = io(chat_service, {
+    const chatServiceUrl = new URL(chat_service, window.location.origin);
+    const socketPath = `${chatServiceUrl.pathname.replace(/\/$/, "")}/socket.io`;
+    const socket = io(chatServiceUrl.origin, {
+      path: socketPath,
       auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
@@ -77,11 +96,45 @@ export default function ChatApp() {
     socket.on("connect", () => {
       setSocketConnected(true);
       lastConnectionErrorRef.current = null;
+      void axios
+        .get<{ messages: ChatMessage[] }>(`${chat_service}/api/v1/message/pending`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then(({ data }) => {
+          for (const message of data.messages) {
+            socket.emit("message-delivered", {
+              chatId: message.chatId,
+              messageId: message._id,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("Unable to sync pending messages", error);
+          toast.error("Could not sync pending messages. Reconnect to try again.");
+        });
+    });
+    socket.on("presence-snapshot", (userIds: string[]) => {
+      setOnlineUserIds(new Set(userIds));
+    });
+    socket.on("presence-update", (presence: { userId: string; isOnline: boolean }) => {
+      setOnlineUserIds((current) => {
+        const next = new Set(current);
+        if (presence.isOnline) next.add(presence.userId);
+        else next.delete(presence.userId);
+        return next;
+      });
     });
     socket.on("disconnect", () => {
       setSocketConnected(false);
+      setOnlineUserIds(new Set());
     });
     socket.on("new-message", (message: ChatMessage) => {
+      if (message.sender !== user?._id) {
+        socket.emit("message-delivered", {
+          chatId: message.chatId,
+          messageId: message._id,
+        });
+      }
       if (message.chatId === activeChatIdRef.current) {
         setMessages((current) =>
           current.some((item) => item._id === message._id)
@@ -111,6 +164,19 @@ export default function ChatApp() {
       void fetchChats();
     });
     socket.on("chat-updated", () => void fetchChats());
+    socket.on(
+      "messages-delivered",
+      (payload: { chatId: string; recipientId: string; messageIds: string[] }) => {
+        if (payload.chatId !== activeChatIdRef.current || payload.recipientId === user?._id) return;
+        setMessages((current) =>
+          current.map((message) =>
+            payload.messageIds.includes(message._id)
+              ? { ...message, deliveredAt: message.deliveredAt ?? new Date().toISOString() }
+              : message,
+          ),
+        );
+      },
+    );
     socket.on(
       "messages-seen",
       (payload: { chatId: string; readerId: string; messageIds: string[] }) => {
@@ -169,33 +235,6 @@ export default function ChatApp() {
     };
   }, [fetchChats, selectedChatId, isAuth]);
 
-  useEffect(() => {
-    if (!showNewChat || !isAuth) return;
-    const token = Cookies.get("token");
-    if (!token) return;
-
-    let cancelled = false;
-    void axios
-      .get<User[]>(`${user_service}/api/v1/user/all`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then(({ data }) => {
-        if (!cancelled) {
-          setDirectory(data.filter((person) => person._id !== user?._id));
-          setDirectoryLoaded(true);
-        }
-      })
-      .catch((error: unknown) => {
-        console.error("Unable to load contacts", error);
-        toast.error("Could not load your contacts");
-        if (!cancelled) setDirectoryLoaded(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuth, showNewChat, user?._id]);
-
   useEffect(
     () => () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -208,6 +247,7 @@ export default function ChatApp() {
     if (!query) return chats;
     return chats.filter(
       ({ user: contact, chat }) =>
+        (contact.contactName || contact.name).toLowerCase().includes(query) ||
         contact.name.toLowerCase().includes(query) ||
         contact.email?.toLowerCase().includes(query) ||
         chat.lastMessage?.text?.toLowerCase().includes(query) ||
@@ -223,41 +263,29 @@ export default function ChatApp() {
     setTypingUserId(null);
   }, []);
 
-  const openNewChat = () => {
-    setSearch("");
-    setDirectoryLoaded(false);
-    setShowNewChat(true);
-  };
-
-  const startConversation = useCallback(
-    async (contact: User) => {
-      const existing = chats.find(({ user: person }) => person._id === contact._id);
-      if (existing) {
-        selectConversation(existing);
-        setShowNewChat(false);
-        return;
-      }
-
+  const renameContact = useCallback(
+    async (chatId: string, name: string) => {
       const token = Cookies.get("token");
-      if (!token) return;
+      if (!token) return false;
       try {
-        const { data } = await axios.post<{ chatId: string }>(
-          `${chat_service}/api/v1/chat/new`,
-          { otherUserId: contact._id },
-          { headers: { Authorization: `Bearer ${token}` } },
+        await axios.patch(
+          `${chat_service}/api/v1/chat/${chatId}/contact-name`,
+          { name },
+          { headers: { Authorization: `******` } },
         );
         await fetchChats();
-        setMessages([]);
-        setMessagesChatId(null);
-        setActiveChatId(data.chatId);
-        setMobileConversationOpen(true);
-        setShowNewChat(false);
+        toast.success(name.trim() ? "Friend name saved" : "Friend name reset");
+        return true;
       } catch (error) {
-        console.error("Unable to start conversation", error);
-        toast.error("Could not start a conversation");
+        const message = axios.isAxiosError(error)
+          ? error.response?.data?.message ?? error.message
+          : "Could not save this friend name";
+        console.error("Unable to save friend name", error);
+        toast.error(message);
+        return false;
       }
     },
-    [chats, fetchChats, selectConversation],
+    [fetchChats],
   );
 
   const emitTyping = (isTyping: boolean) => {
@@ -315,16 +343,27 @@ export default function ChatApp() {
   };
 
   const shareInvite = async () => {
-    const inviteUrl = new URL("/login", window.location.origin).toString();
     try {
+      const token = Cookies.get("token");
+      if (!token) {
+        toast.error("Please log in again to create an invite");
+        return;
+      }
+      const { data } = await axios.post<{ inviteToken: string }>(
+        `${user_service}/api/v1/invite`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const inviteUrl = new URL("/login", window.location.origin);
+      inviteUrl.searchParams.set("invite", data.inviteToken);
       if (navigator.share) {
         await navigator.share({
           title: "Join me on Mingle",
           text: "Let's chat on Mingle.",
-          url: inviteUrl,
+          url: inviteUrl.toString(),
         });
       } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(inviteUrl);
+        await navigator.clipboard.writeText(inviteUrl.toString());
         toast.success("Invite link copied");
       } else {
         toast.error("Sharing is not available in this browser");
@@ -332,7 +371,10 @@ export default function ChatApp() {
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
       console.error("Unable to share invite link", error);
-      toast.error("Could not share the invite link");
+      const message = axios.isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message ?? "Could not create an invite link"
+        : "Could not share the invite link";
+      toast.error(message);
     }
   };
 
@@ -345,13 +387,14 @@ export default function ChatApp() {
         <ConversationSidebar
           user={user}
           chats={filteredChats}
+          onRenameContact={renameContact}
+          onlineUserIds={onlineUserIds}
           totalChatCount={chats.length}
           activeChatId={selectedChatId}
           mobileHidden={mobileConversationOpen}
           search={search}
           onSearchChange={setSearch}
           onSelect={selectConversation}
-          onNewChat={openNewChat}
           onInvite={() => void shareInvite()}
           onLogout={handleLogout}
         />
@@ -368,21 +411,12 @@ export default function ChatApp() {
           selectedImage={selectedImage}
           sending={sending}
           onBack={() => setMobileConversationOpen(false)}
-          onNewChat={openNewChat}
           onDraftChange={handleDraftChange}
           onImageChange={setSelectedImage}
           onSend={sendMessage}
         />
       </div>
 
-      {showNewChat && (
-        <NewChatDialog
-          contacts={directory}
-          loading={loadingDirectory}
-          onClose={() => setShowNewChat(false)}
-          onSelect={(contact) => void startConversation(contact)}
-        />
-      )}
     </main>
   );
 }

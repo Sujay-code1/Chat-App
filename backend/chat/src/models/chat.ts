@@ -2,6 +2,10 @@ import mongoose, {Document, Schema} from 'mongoose'
 
 export interface IChat extends Document {
     users: string[];
+    contactNames: {
+        userId: string;
+        name: string;
+    }[];
     lastMessage?: {
         text: string,
         sender: string,
@@ -13,6 +17,10 @@ export interface IChat extends Document {
 const schema: Schema<IChat> = new Schema(
     {
         users:[{ type: String, required: true }],
+        contactNames: [{
+            userId: { type: String, required: true },
+            name: { type: String, required: true },
+        }],
         lastMessage: {
             text: { type: String, default: '' },
             sender: { type: String, default: '' }

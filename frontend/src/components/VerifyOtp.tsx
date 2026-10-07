@@ -6,13 +6,20 @@ import axios from "axios";
 import Cookies from "js-cookie";
 import toast from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
-import { user_service, useAppData } from "@/src/context/AppContext"; 
+import { chat_service, user_service, useAppData, type User } from "@/src/context/AppContext";
 import Loading from "./Loading";
 
 export default function VerifyOtp() {
-  const { isAuth, setAuth: setIsAuth, setUser, loading: userLoading } = useAppData();
+  const {
+    isAuth,
+    setAuth: setIsAuth,
+    setUser,
+    fetchChats,
+    loading: userLoading,
+  } = useAppData();
   const searchParams = useSearchParams();
   const email = searchParams?.get("email") || "";
+  const inviteToken = searchParams?.get("invite");
   const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -129,12 +136,29 @@ export default function VerifyOtp() {
 
     setLoading(true);
     try {
-      const { data } = await axios.post(
+      const { data } = await axios.post<{
+        token?: string;
+        user: User;
+        inviterId?: string;
+      }>(
         `${user_service}/api/v1/verify`,
-        { email, otp: code }   
+        { email, otp: code, ...(inviteToken ? { inviteToken } : {}) },
       );
 
       if (data?.token) {
+        if (data.inviterId) {
+          try {
+            await axios.post(
+              `${chat_service}/api/v1/chat/invited`,
+              { otherUserId: data.inviterId },
+              { headers: { Authorization: `Bearer ${data.token}` } },
+            );
+          } catch (inviteError: unknown) {
+            console.error("Unable to add inviter to the friend list", inviteError);
+            window.localStorage.setItem("pending-inviter-id", data.inviterId);
+            toast.error("Account verified, but we couldn't add your inviter yet. We'll retry in chat.");
+          }
+        }
         Cookies.set("token", data.token, {
           expires: 7,
           path: "/",
@@ -144,6 +168,7 @@ export default function VerifyOtp() {
         setOtp(["","","","","",""])
         setUser(data.user)
         setIsAuth(true)
+        await fetchChats();
       }
 
       toast.success("User is verified");
@@ -161,19 +186,16 @@ export default function VerifyOtp() {
     }
   };
 
-  if(userLoading) return <Loading/>
+  useEffect(() => {
+    if (!userLoading && isAuth) {
+      router.replace("/chat");
+    }
+  }, [isAuth, router, userLoading]);
 
-  if (isAuth) {
-    router.push("/chat");
-    return null;
-  }
+  if (userLoading) return <Loading/>;
+  if (isAuth) return null;
 
-
-  
-
-
-  return (
-    <main className="auth-shell flex min-h-screen items-center justify-center text-white">
+  return (    <main className="auth-shell flex min-h-screen items-center justify-center text-white">
       <div className="w-full max-w-md p-6 bg-[#111916] rounded-xl">
         <div className="mb-6 flex items-center justify-between">
           <button
@@ -218,7 +240,7 @@ export default function VerifyOtp() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded bg-[#94e2b5] py-2 font-semibold text-[#183023]"
+            className="w-full rounded  bg-blue-600 hover:bg-blue-500 py-2 font-semibold text-white"
           >
             {loading ? "Verifying..." : "Verify"}
           </button>

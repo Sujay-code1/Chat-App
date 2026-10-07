@@ -9,6 +9,8 @@ export interface IMessage extends Document{
         publicId:string;
     };
     messageType: "text" | "image";
+    kind?: "user" | "invite-welcome";
+    deliveredAt?: Date | null;
     seen:boolean;
     seenAt?:Date;
     createdAt:Date;
@@ -39,6 +41,15 @@ const schema = new Schema<IMessage>(
     default:"text"
 
   },
+  kind:{
+    type:String,
+    enum:["user", "invite-welcome"],
+    default:"user",
+  },
+  deliveredAt:{
+    type:Date,
+    default:null,
+  },
 
   seen:{
     type:Boolean,
@@ -55,5 +66,10 @@ const schema = new Schema<IMessage>(
     timestamps:true
 }
 )
+
+schema.index(
+  { chatId: 1, kind: 1 },
+  { unique: true, partialFilterExpression: { kind: "invite-welcome" } },
+);
 
 export const  Messages = mongoose.model<IMessage>("Messages", schema);

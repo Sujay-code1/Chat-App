@@ -7,6 +7,7 @@ export interface ChatMessage {
   text?: string;
   image?: { url: string; publicId: string };
   messageType: "text" | "image";
+  deliveredAt?: string | null;
   seen: boolean;
   createdAt: string;
 }

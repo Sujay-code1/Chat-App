@@ -74,6 +74,78 @@ export const createNewChat = TryCatch(
   },
 );
 
+export const createInvitedChat = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    const recipientId = req.user?._id;
+    const inviterId =
+      typeof req.body.otherUserId === "string" ? req.body.otherUserId : "";
+
+    if (!recipientId || !inviterId || recipientId === inviterId) {
+      res.status(400).json({ message: "A valid inviter is required" });
+      return;
+    }
+
+    let chat = await Chat.findOne({
+      users: { $all: [recipientId, inviterId], $size: 2 },
+    });
+    if (!chat) {
+      chat = await Chat.create({ users: [recipientId, inviterId] });
+    }
+
+    let welcomeMessage = await Messages.findOne({
+      chatId: chat._id,
+      kind: "invite-welcome",
+    });
+
+    if (!welcomeMessage) {
+      try {
+        welcomeMessage = await Messages.create({
+          chatId: chat._id,
+          sender: inviterId,
+          text: "Welcome to Mingle! Your friend is happy you're here.",
+          messageType: "text",
+          kind: "invite-welcome",
+          deliveredAt: null,
+          seen: false,
+        });
+        chat.lastMessage = {
+          text: welcomeMessage.text ?? "",
+          sender: inviterId,
+        };
+        await chat.save();
+      } catch (error) {
+        if (
+          !error ||
+          typeof error !== "object" ||
+          !("code" in error) ||
+          error.code !== 11000
+        ) {
+          throw error;
+        }
+        welcomeMessage = await Messages.findOne({
+          chatId: chat._id,
+          kind: "invite-welcome",
+        });
+        if (!welcomeMessage) throw error;
+      }
+    }
+
+    emitToUsers([recipientId, inviterId], "chat-updated", {
+      chatId: chat._id.toString(),
+      lastMessage: chat.lastMessage,
+      updatedAt: chat.updatedAt,
+    });
+    if (welcomeMessage) {
+      emitToUsers([recipientId, inviterId], "new-message", welcomeMessage.toObject());
+    }
+
+    res.status(200).json({
+      message: "Inviter added to your friend list",
+      chatId: chat._id,
+    });
+  },
+);
+
 export const getAllChats = TryCatch(
   async (req: AuthenticatedRequest, res) => {
     const userId = req.user?._id;
@@ -95,13 +167,53 @@ export const getAllChats = TryCatch(
         });
         const user = await fetchOtherUser(otherUserId, req.headers.authorization);
         return {
-          user,
+          user: {
+            ...user,
+            contactName: chat.contactNames.find((entry) => entry.userId === userId)?.name,
+          },
           chat: { ...chat.toObject(), unseenCount },
         };
       }),
     );
 
     res.json({ chats: chatWithUserData.filter((chat) => chat !== null) });
+  },
+);
+
+export const updateContactName = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    const userId = req.user?._id;
+    const { chatId } = req.params;
+    const name = typeof req.body.name === "string" ? req.body.name.trim() : null;
+
+    if (!userId) {
+      res.status(401).json({ message: "Please log in to rename this contact" });
+      return;
+    }
+    if (typeof chatId !== "string" || !chatId) {
+      res.status(400).json({ message: "Chat ID is required" });
+      return;
+    }
+    if (name === null || name.length > 40) {
+      res.status(400).json({ message: "A contact name of up to 40 characters is required" });
+      return;
+    }
+
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+      res.status(404).json({ message: "Chat not found" });
+      return;
+    }
+    if (!chat.users.includes(userId)) {
+      res.status(403).json({ message: "You are not a participant in this chat" });
+      return;
+    }
+
+    chat.contactNames = chat.contactNames.filter((entry) => entry.userId !== userId);
+    if (name) chat.contactNames.push({ userId, name });
+    await chat.save();
+
+    res.json({ contactName: name || null });
   },
 );
 
@@ -200,6 +312,32 @@ export const getMessagesByChat = TryCatch(
       return;
     }
 
+    const undeliveredMessages = await Messages.find({
+      chatId,
+      sender: { $ne: userId },
+      deliveredAt: null,
+    }).select("_id sender");
+    if (undeliveredMessages.length > 0) {
+      const deliveredAt = new Date();
+      await Messages.updateMany(
+        { _id: { $in: undeliveredMessages.map((message) => message._id) } },
+        { $set: { deliveredAt } },
+      );
+      const deliveredBySender = new Map<string, string[]>();
+      for (const message of undeliveredMessages) {
+        const messageIds = deliveredBySender.get(message.sender) ?? [];
+        messageIds.push(message._id.toString());
+        deliveredBySender.set(message.sender, messageIds);
+      }
+      for (const [senderId, messageIds] of deliveredBySender) {
+        emitToUsers([senderId], "messages-delivered", {
+          chatId,
+          recipientId: userId,
+          messageIds,
+        });
+      }
+    }
+
     const unseenMessages = await Messages.find({
       chatId,
       sender: { $ne: userId },
@@ -224,6 +362,31 @@ export const getMessagesByChat = TryCatch(
       return;
     }
     const user = await fetchOtherUser(otherUserId, req.headers.authorization);
-    res.json({ messages, user });
+    res.json({
+      messages,
+      user: {
+        ...user,
+        contactName: chat.contactNames.find((entry) => entry.userId === userId)?.name,
+      },
+    });
+  },
+);
+
+export const getPendingMessages = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    const chats = await Chat.find({ users: userId }).select("_id");
+    const messages = await Messages.find({
+      chatId: { $in: chats.map((chat) => chat._id) },
+      sender: { $ne: userId },
+      deliveredAt: null,
+    }).sort({ createdAt: 1 });
+
+    res.json({ messages });
   },
 );

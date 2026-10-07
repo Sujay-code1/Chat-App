@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type FormEvent } from "react";
-import { ArrowLeft, Check, CheckCheck, MessageCircle, MoreVertical, UserPlus } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, MessageCircle, MoreVertical } from "lucide-react";
 import ChatAvatar from "./ChatAvatar";
 import ChatComposer from "./ChatComposer";
 import type { ChatMessage } from "./types";
@@ -25,7 +25,6 @@ interface ConversationViewProps {
   sending: boolean;
   onBack: () => void;
   onReconnect: () => void;
-  onNewChat: () => void;
   onDraftChange: (value: string) => void;
   onImageChange: (file: File | null) => void;
   onSend: (event: FormEvent<HTMLFormElement>) => void;
@@ -44,7 +43,6 @@ export default function ConversationView({
   sending,
   onBack,
   onReconnect,
-  onNewChat,
   onDraftChange,
   onImageChange,
   onSend,
@@ -63,9 +61,9 @@ export default function ConversationView({
             <button className="icon-button mobile-back" onClick={onBack} aria-label="Back to conversations">
               <ArrowLeft size={19} />
             </button>
-            <ChatAvatar name={conversation.user.name} />
+            <ChatAvatar name={conversation.user.contactName || conversation.user.name} />
             <div className="contact-heading">
-              <strong>{conversation.user.name}</strong>
+              <strong>{conversation.user.contactName || conversation.user.name}</strong>
               <span>{typing ? "typing..." : "direct conversation"}</span>
             </div>
             <div className="contact-actions">
@@ -114,8 +112,10 @@ export default function ConversationView({
                           <time>{formatTime(message.createdAt)}</time>
                           {isMine && (
                             message.seen
-                              ? <CheckCheck className="read-check" size={15} />
-                              : <Check size={14} />
+                              ? <CheckCheck className="read-check" size={15} aria-label="Read" />
+                              : message.deliveredAt
+                                ? <CheckCheck className="delivered-check" size={15} aria-label="Delivered" />
+                                : <Check size={14} aria-label="Sent" />
                           )}
                         </div>
                       </div>
@@ -143,7 +143,6 @@ export default function ConversationView({
           <span className="eyebrow">A LITTLE CLOSER</span>
           <h2>Good conversations<br />make good days.</h2>
           <p>Choose a conversation or find someone new to talk to.</p>
-          <button onClick={onNewChat}><UserPlus size={17} /> Start a conversation</button>
         </div>
       )}
     </section>

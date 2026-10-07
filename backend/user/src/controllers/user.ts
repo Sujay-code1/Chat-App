@@ -4,7 +4,30 @@ import { publishToQueue } from '../config/rabbitmq.js'
 import {User} from "../model/User.js"
 import { generateToken } from '../config/generateToken.js'
 import type { AuthenticatedRequest } from '../middleware/isAuth.js'
+import jwt from 'jsonwebtoken'
 
+const INVITE_TOKEN_PURPOSE = 'friend-invite'
+
+export const createInvite = TryCatch(async(req: AuthenticatedRequest, res) => {
+    const inviterId = req.user?._id?.toString()
+    const secret = process.env.JWT_SECRET
+
+    if (!inviterId) {
+        res.status(401).json({ message: "Please log in to create an invite" })
+        return
+    }
+    if (!secret) {
+        res.status(500).json({ message: "Server JWT secret not configured" })
+        return
+    }
+
+    const inviteToken = jwt.sign(
+        { purpose: INVITE_TOKEN_PURPOSE, inviterId },
+        secret,
+        { expiresIn: '30d' },
+    )
+    res.status(201).json({ inviteToken })
+})
 
 export const loginUser = TryCatch(async(req, res) => {
     const { email } = req.body
@@ -36,7 +59,7 @@ export const loginUser = TryCatch(async(req, res) => {
 })
 
 export const verifyUser = TryCatch(async(req, res)=>{
-    const{email, otp:enteredOtp} = req.body;
+    const{email, otp:enteredOtp, inviteToken} = req.body;
 
     if(!email || !enteredOtp){
         res.status(400).json({
@@ -44,6 +67,31 @@ export const verifyUser = TryCatch(async(req, res)=>{
         })
         return
     }
+
+    let inviterId: string | undefined
+    if (inviteToken !== undefined) {
+        const secret = process.env.JWT_SECRET
+        if (!secret || typeof inviteToken !== 'string') {
+            res.status(400).json({ message: "Invalid invite link" })
+            return
+        }
+        try {
+            const invite = jwt.verify(inviteToken, secret)
+            if (
+                typeof invite !== 'object' ||
+                invite.purpose !== INVITE_TOKEN_PURPOSE ||
+                typeof invite.inviterId !== 'string'
+            ) {
+                res.status(400).json({ message: "Invalid invite link" })
+                return
+            }
+            inviterId = invite.inviterId
+        } catch {
+            res.status(400).json({ message: "This invite link is invalid or has expired" })
+            return
+        }
+    }
+
     const otpKey = `otp:${email}`
     const storedOtp = await get(otpKey)
     if(!storedOtp || enteredOtp !== storedOtp){
@@ -68,7 +116,8 @@ export const verifyUser = TryCatch(async(req, res)=>{
     return res.status(200).json({
         message: "User verified",
         token,
-        user
+        user,
+        ...(inviterId && inviterId !== user._id.toString() ? { inviterId } : {}),
     }) 
 
 })

@@ -10,13 +10,19 @@ const initials = (name: string) =>
 export default function ChatAvatar({
   name,
   size = "normal",
+  online = false,
 }: {
   name: string;
   size?: "normal" | "large";
+  online?: boolean;
 }) {
   return (
-    <div className={`avatar ${size === "large" ? "avatar-large" : ""}`}>
+    <div
+      className={`avatar ${size === "large" ? "avatar-large" : ""}`}
+      aria-label={online ? `${name} is online` : undefined}
+    >
       <span>{initials(name)}</span>
+      {online && <span className="avatar-presence" aria-hidden="true" />}
     </div>
   );
 }
